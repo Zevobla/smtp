@@ -11,7 +11,7 @@ def get_item_page(request: HttpRequest, item_id: int):
     except Item.DoesNotExist:
         return render(request, 'item.html', {"error": "Item does not exist"})
 
-    return render(request, 'item.html', {"item": item})
+    return render(request, 'item.html', {"item": item, "stripe_publishable_key": os.getenv('STRIPE_PUBLISHABLE_KEY')})
 
 
 def create_stripe_session(request: HttpRequest, item_id: int):
