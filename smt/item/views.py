@@ -72,6 +72,7 @@ def get_order(request: HttpRequest):
             "applied_discount_code": order.discount.code if order.discount else None,
             "tax": order.tax.name if order.tax else None,
             "taxes": taxes,
+            "cs":  os.getenv('STRIPE_SECRET_KEY'),
             "pk": publishable_key
         }
 
