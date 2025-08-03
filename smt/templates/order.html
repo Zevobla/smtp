@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Details</title>
+    <script src="https://js.stripe.com/basil/stripe.js"></script>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <h1>Order Details</h1>
+
+    <div id="order-container">
+        <h2>Order ID: {{ order_id }}</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Price</th>
+                    <th>Quantity</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td><a href="{% url 'get_item_page' item.id %}">{{ item.name }}</a></td>
+                    <td>${{ item.price }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td><button class="clear-item-btn" data-item-id="{{ item.id }}">Clear</button></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div id="apply-discount-container">
+        <form id="apply-discount-form" method="post" action="{% url 'apply_discount_code' %}">
+            {% csrf_token %}
+            <label for="discount-code">Discount Code:</label>
+            <input type="text" id="discount-code" name="discount_code" placeholder="Enter discount code" 
+                   value="{% if applied_discount_code %}{{ applied_discount_code }}{% endif %}"
+                   {% if applied_discount_code %}disabled{% endif %}>
+            <button type="submit" id="apply-discount-btn" {% if applied_discount_code %}style="display: none;"{% endif %}>Apply Discount</button>
+            <button type="button" id="remove-discount-btn" {% if not applied_discount_code %}style="display: none;"{% endif %}>Remove Discount</button>
+        </form>
+    </div>
+
+    <h3><p id="updated-total-price">Total Price: {{ total_price }} {{ currency }}</p></h3>
+
+    <div id="tax-container">
+        <label for="tax-residency">Tax Residency:</label>
+        <select id="tax-residency" name="tax_residency">
+            <option value="">Select your tax residency</option>
+            {% for tax in taxes %}
+            <option value="{{ tax.id }}">{{ tax.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <form id="payment-form" data-secret="{{ cs }}">
+        <div id="payment-element">
+        </div>
+        <button id="submit">Pay</button>
+        <div id="error-message">
+        </div>
+    </form>
+
+    <div id="all-clear-container">
+        <button id="all-clear-btn">Clear Order</button>
+    </div>
+
+    <a href="/">Back to Home</a>
+
+    <script lang="js">
+        const stripe = Stripe('{{ pk }}');
+        const options = {
+            clientSecret: '{{ cs }}',
+            appearance: {/*...*/},
+        };
+        const elements = stripe.elements(options);
+        const paymentElementOptions = { layout: 'accordion'};
+        const paymentElement = elements.create('payment', paymentElementOptions);
+        paymentElement.mount('#payment-element');
+    </script>
+    <script lang="js">
+        const form = document.getElementById('payment-form');
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const {error} = await stripe.confirmPayment({
+                elements,
+                confirmParams: {
+                    return_url: 'https://example.com/order/123/complete',
+                },
+            });
+
+            if (error) {
+                const messageContainer = document.querySelector('#error-message');
+                messageContainer.textContent = error.message;
+            } else {
+            }
+        });
+    </script>
+    <script>
+        document.getElementById('apply-discount-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+
+            const response = await fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('updated-total-price').textContent = `Total Price: ${data.total_price} {{ currency }}`;
+                // Disable input and hide apply button, show remove button
+                document.getElementById('discount-code').disabled = true;
+                document.getElementById('discount-code').value = data.discount_code || document.getElementById('discount-code').value;
+                document.getElementById('apply-discount-btn').style.display = 'none';
+                document.getElementById('remove-discount-btn').style.display = 'inline-block';
+            } else {
+                alert(data.error);
+            }
+        });
+
+        document.getElementById('remove-discount-btn').addEventListener('click', async function(event) {
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+            const response = await fetch('{% url "remove_discount_code" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('updated-total-price').textContent = `Total Price: ${data.total_price} {{ currency }}`;
+                // Enable input, clear it, show apply button, hide remove button
+                document.getElementById('discount-code').disabled = false;
+                document.getElementById('discount-code').value = '';
+                document.getElementById('apply-discount-btn').style.display = 'inline-block';
+                document.getElementById('remove-discount-btn').style.display = 'none';
+            } else {
+                alert(data.error);
+            }
+        });
+
+        document.getElementById('tax-residency').addEventListener('change', async function(event) {
+            const taxId = event.target.value;
+            
+            const formData = new FormData();
+            formData.append('tax_id', taxId);
+            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+            const response = await fetch('{% url "apply_tax" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('updated-total-price').textContent = `Total Price: ${data.total_price} {{ currency }}`;
+            } else {
+                alert(data.error);
+            }
+        });
+
+        document.querySelectorAll('.clear-item-btn').forEach(button => {
+            button.addEventListener('click', async function(event) {
+                const itemId = event.target.getAttribute('data-item-id');
+
+                const formData = new FormData();
+                formData.append('item_id', itemId);
+                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+                const response = await fetch('{% url "clear_item" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.error);
+                }
+            });
+        });
+
+        document.getElementById('all-clear-btn').addEventListener('click', async function(event) {
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+            const response = await fetch('{% url "clear_order" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.error);
+            }
+        });
+    </script>
+</body>
+</html>
