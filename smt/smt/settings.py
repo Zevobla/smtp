@@ -12,21 +12,26 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from urllib.parse import urlparse
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+BASE_URL = os.getenv("BASE_URL", "http://localhost")
+parsed_url = urlparse(BASE_URL)
+BASE_DOMAIN = parsed_url.netloc
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-vq5&^87e8w-fcq+2b_4kds*3+gn8o0_(v-b0#w7=+7i9_a^r9z'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-vq5&^87e8w-fcq+2b_4kds*3+gn8o0_(v-b0#w7=+7i9_a^r9z')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [BASE_DOMAIN
+]
 
 
 # Application definition
